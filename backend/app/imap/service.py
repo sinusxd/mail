@@ -14,6 +14,7 @@ from imap.exceptions import MailServiceException
 from imap.schemas import EmailInfo
 from imap.utils import decode_mime_header, add_target_blank
 from imap_tools import MailBox, A
+from imapclient.imap_utf7 import encode as encode_utf7
 
 fernet = Fernet(settings.ENCRYPTION_KEY)
 
@@ -73,9 +74,6 @@ def fetch_emails_batch(
         raise MailServiceException(f"IMAP ошибка: {str(e)}")
     except Exception as e:
         raise MailServiceException(f"Ошибка: {str(e)}")
-
-
-from imap_tools import MailBox, AND
 
 
 def fetch_emails_from_folder(
@@ -244,3 +242,42 @@ def fetch_email_headers_from_folder(
 
     except Exception as e:
         raise MailServiceException(f"Ошибка получения заголовков писем из папки {folder_name}: {str(e)}")
+
+
+def fetch_folder_statuses(account: MailAccount) -> list[dict]:
+    """
+    Возвращает список selectable папок с их последним UID и количеством писем,
+    используя imap_tools.folder.status(name, [flags]).
+    """
+    try:
+        pwd = fernet.decrypt(account.password.encode()).decode()
+        with MailBox(account.imap_server).login(account.mail_email, pwd) as mailbox:
+            folders_info = []
+
+            for folder_meta in mailbox.folder.list():
+                name = folder_meta.name
+
+                # пропускаем контейнеры и невыбираемые
+                if r'\Noselect' in folder_meta.flags or name.strip() == "[Gmail]":
+                    continue
+
+                # устанавливаем папку
+                mailbox.folder.set(name)
+
+                # запрашиваем нужные поля статусa
+                status = mailbox.folder.status(name, ["MESSAGES", "UIDNEXT"])
+
+                count = status.get("MESSAGES", 0) or status.get("messages", 0)
+                # UIDNEXT — следующий за последним, поэтому -1
+                uidnext = max(0, (status.get("UIDNEXT", 1) or status.get("uidnext", 1)) - 1)
+
+                folders_info.append({
+                    "name": name,
+                    "email_count": count,
+                    "uidnext": uidnext
+                })
+
+            return folders_info
+
+    except Exception as e:
+        raise MailServiceException(f"Ошибка при получении статусов папок: {e}")

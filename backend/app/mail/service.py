@@ -1,4 +1,3 @@
-import re
 import time
 from typing import List
 
@@ -11,7 +10,6 @@ from mail.exceptions import MailServiceException
 from mail.models import Email, Folder
 from mail.schemas import EmailInfo, FolderInfo
 from mail_accounts.models import MailAccount
-from imap.service import fetch_email_by_uid, connect_imap, fetch_folders, fetch_emails_from_folder
 from utils import parse_email_date
 
 
@@ -38,13 +36,33 @@ def get_email_by_uid(
         Email.uid == int(uid)
     ).first()
 
-    if not email:
-        mail = connect_imap(account)
-        fetched = fetch_email_by_uid(mail, uid)
-        mail.logout()
+    # Если письмо есть, но body пустой — догружаем тело через IMAP
+    if email and not email.body:
+        fetched = imap.service.fetch_email_by_uid_with_imap_tools(
+            account=account,
+            folder_name="INBOX",  # или account.default_folder, если у тебя такое поле есть
+            uid=int(uid)
+        )
 
         if not fetched:
-            raise HTTPException(status_code=404, detail="Письмо не найдено")
+            raise HTTPException(status_code=404, detail="Письмо не найдено на сервере")
+
+        email.body = fetched.body
+        email.snippet = fetched.snippet
+        db.add(email)
+        db.commit()
+        db.refresh(email)
+
+    # Если письма вообще нет в БД — загружаем полностью
+    if not email:
+        fetched = imap.service.fetch_email_by_uid_with_imap_tools(
+            account=account,
+            folder_name="INBOX",  # см. выше
+            uid=int(uid)
+        )
+
+        if not fetched:
+            raise HTTPException(status_code=404, detail="Письмо не найдено на сервере")
 
         email = Email(
             account_id=account.id,
@@ -63,55 +81,42 @@ def get_email_by_uid(
     return EmailInfo.model_validate(email)
 
 
-def get_or_fetch_folders(db: Session, account: MailAccount) -> List[FolderInfo]:
-    folders = db.query(Folder).filter(Folder.account_id == account.id).all()
+from imap.service import fetch_folder_statuses
 
+
+def get_or_fetch_folders(db: Session, account: MailAccount) -> List[FolderInfo]:
+    # Если папки уже есть в БД — возвращаем их
+    folders = db.query(Folder).filter(Folder.account_id == account.id).all()
     if folders:
         return [FolderInfo.model_validate(f) for f in folders]
 
     try:
-        folder_names = fetch_folders(account)
+        folders_data = fetch_folder_statuses(account)
 
-        mail = connect_imap(account)
-        try:
-            for name in folder_names:
-                # Получаем UIDNEXT и COUNT
-                uidnext = 0
-                count = 0
-
-                status_res, status_data = mail.status(f'"{name}"', "(UIDNEXT MESSAGES)")
-                if status_res == "OK" and status_data:
-                    decoded = status_data[0].decode()
-                    uid_match = re.search(r"UIDNEXT (\d+)", decoded)
-                    count_match = re.search(r"MESSAGES (\d+)", decoded)
-
-                    if uid_match:
-                        uidnext = int(uid_match.group(1)) - 1
-                    if count_match:
-                        count = int(count_match.group(1))
-
-                folder = Folder(
-                    name=name,
-                    account_id=account.id,
-                    last_uid=uidnext,
-                    email_count=count
-                )
-                db.add(folder)
-        finally:
-            mail.logout()
+        for f in folders_data:
+            folder = Folder(
+                name=f["name"],
+                account_id=account.id,
+                last_uid=f["uidnext"],
+                email_count=f["email_count"]
+            )
+            db.add(folder)
 
         db.commit()
-        return [FolderInfo.model_validate(f) for f in db.query(Folder).filter(Folder.account_id == account.id).all()]
+        return [
+            FolderInfo.model_validate(f)
+            for f in db.query(Folder).filter(Folder.account_id == account.id).all()
+        ]
     except MailServiceException as e:
         raise e
 
 
 def get_or_fetch_emails_from_folder(
-    db: Session,
-    account: MailAccount,
-    folder_name: str = "INBOX",
-    offset: int = 0,
-    limit: int = 20
+        db: Session,
+        account: MailAccount,
+        folder_name: str = "INBOX",
+        offset: int = 0,
+        limit: int = 20
 ) -> List[EmailInfo]:
     start = time.perf_counter()
 
