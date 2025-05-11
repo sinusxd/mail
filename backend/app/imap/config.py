@@ -1,0 +1,2 @@
+IMAP_DEFAULT_PORT = 993
+IMAP_TIMEOUT = 30  # секунд

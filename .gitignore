@@ -1,0 +1,72 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Virtual env
+venv/
+env/
+.venv/
+.env/
+
+# Byte-compiled / optimized / DLL files
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.manifest
+*.spec
+
+# PyInstaller
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Logs
+*.log
+
+# mypy
+.mypy_cache/
+
+# ===== FastAPI/uvicorn =====
+instance/
+*.db
+*.sqlite3
+
+# ===== IDE/editor =====
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ===== React (frontend folder) =====
+frontend/node_modules/
+frontend/build/
+frontend/.env
+frontend/.next/
+frontend/.cache/
+
+# npm log files
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# ===== OS files =====
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
