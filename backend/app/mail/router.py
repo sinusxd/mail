@@ -7,6 +7,7 @@ from auth.dependencies import get_current_user
 from database import get_db
 from mail_accounts.models import MailAccount
 from . import service
+from .models import Folder
 from .schemas import EmailInfo, FolderInfo
 from .exceptions import MailServiceException
 from .service import get_or_fetch_emails_from_folder
@@ -31,11 +32,18 @@ def get_paginated_emails(
     if not account:
         raise HTTPException(status_code=404, detail="Почтовый аккаунт не найден")
 
+    # получаем письма
     emails = service.get_or_fetch_emails_from_folder(db, account, folder_name, offset, limit)
+
+    # получаем email_count для указанной папки
+    folder = db.query(Folder).filter(
+        Folder.account_id == account.id,
+        Folder.name == folder_name
+    ).first()
 
     return {
         "emails": emails,
-        "email_count": account.email_count,
+        "email_count": folder.email_count if folder else 0
     }
 
 

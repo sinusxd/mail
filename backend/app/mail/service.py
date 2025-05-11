@@ -107,22 +107,22 @@ def get_or_fetch_folders(db: Session, account: MailAccount) -> List[FolderInfo]:
 
 
 def get_or_fetch_emails_from_folder(
-        db: Session,
-        account: MailAccount,
-        folder_name: str = "INBOX",
-        offset: int = 0,
-        limit: int = 20
+    db: Session,
+    account: MailAccount,
+    folder_name: str = "INBOX",
+    offset: int = 0,
+    limit: int = 20
 ) -> List[EmailInfo]:
     start = time.perf_counter()
 
-    # Получаем или создаём папку
+    # Получаем или создаем папку
     folder = db.query(Folder).filter(
         Folder.account_id == account.id,
         Folder.name == folder_name
     ).first()
 
     if not folder:
-        folder = Folder(name=folder_name, account_id=account.id, last_uid=0)
+        folder = Folder(name=folder_name, account_id=account.id, last_uid=0, email_count=0)
         db.add(folder)
         db.commit()
         db.refresh(folder)
@@ -142,17 +142,23 @@ def get_or_fetch_emails_from_folder(
     )
     print(f"[PERF] DB query took {time.perf_counter() - db_query_start:.3f}s")
 
-    # Если писем достаточно — возвращаем
+    # Кол-во писем в БД для этой папки
     total_email_count = db.query(func.count(Email.id)).filter(
         Email.account_id == account.id,
         Email.folder_id == folder.id
     ).scalar()
 
+    # 1. Если знаем точное количество писем в папке и все уже в БД — не идем в IMAP
+    if folder.email_count and total_email_count >= folder.email_count:
+        print(f"[PERF] TOTAL took {time.perf_counter() - start:.3f}s (from DB, known email_count)")
+        return [EmailInfo.model_validate(e) for e in emails]
+
+    # 2. Если в БД уже достаточно писем для текущей страницы — не идем в IMAP
     if total_email_count >= offset + limit:
         print(f"[PERF] TOTAL took {time.perf_counter() - start:.3f}s (from DB only)")
         return [EmailInfo.model_validate(e) for e in emails]
 
-    # Иначе — запрашиваем новые письма из IMAP
+    # 3. Иначе — запрашиваем из IMAP
     fetch_start = time.perf_counter()
     fetched_emails = imap.service.fetch_email_headers_from_folder(
         account=account,
@@ -163,7 +169,7 @@ def get_or_fetch_emails_from_folder(
     )
     print(f"[PERF] fetch_email_headers_from_folder took {time.perf_counter() - fetch_start:.3f}s")
 
-    # UID'ы уже существующих писем
+    # UID'ы писем, которые уже есть в БД
     existing_uids = {
         uid for (uid,) in db.query(Email.uid)
         .filter(
@@ -174,7 +180,6 @@ def get_or_fetch_emails_from_folder(
         .all()
     }
 
-    # Сохраняем только новые письма
     max_uid_fetched = 0
     for fetched in fetched_emails:
         if fetched.uid in existing_uids:
@@ -193,14 +198,16 @@ def get_or_fetch_emails_from_folder(
         db.add(email)
         max_uid_fetched = max(max_uid_fetched, fetched.uid)
 
+    # Обновляем last_uid и (опционально) email_count
     if max_uid_fetched > (folder.last_uid or 0):
         folder.last_uid = max_uid_fetched
+        # можно обновлять и folder.email_count, если хочешь быть точным
         db.add(folder)
 
     db.commit()
     print(f"[PERF] DB commit + folder.last_uid update took {time.perf_counter() - fetch_start:.3f}s")
 
-    # Повторный запрос после вставки новых писем
+    # Повторный запрос для возврата актуальных данных
     reload_start = time.perf_counter()
     final_emails = (
         db.query(Email)
