@@ -1,10 +1,13 @@
-import {MailAccount} from "../models/dto/mailAccount";
 import api from "../api";
-import {AxiosResponse} from "axios";
+import { AxiosResponse } from "axios";
+import {MailAccount, MailAccountCreate} from "../models/dto/mailAccount";
 
-export default class MailAccountsService {
+export default {
+  async getAllMailAccounts(): Promise<AxiosResponse<MailAccount[]>> {
+    return api.get("/api/v1/mail-accounts");
+  },
 
-    static async getAllMailAccounts(): Promise<AxiosResponse<MailAccount[]>> {
-        return api.get<MailAccount[]>('/api/v1/mail-accounts');
-    }
-}
+  async createMailAccount(data: MailAccountCreate): Promise<AxiosResponse<MailAccount>> {
+    return api.post("/api/v1/mail-accounts", data);
+  },
+};

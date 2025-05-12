@@ -5,5 +5,6 @@ export interface EmailInfo {
   date: string;
   body: string;
   snippet: string;
+  is_starred: boolean;
   uid: number
 }

@@ -281,3 +281,56 @@ def fetch_folder_statuses(account: MailAccount) -> list[dict]:
 
     except Exception as e:
         raise MailServiceException(f"Ошибка при получении статусов папок: {e}")
+
+
+def fetch_email_by_uid_with_imap_tools(
+    account: MailAccount,
+    folder_name: str,
+    uid: int
+) -> Optional[EmailInfo]:
+    """
+    Получает письмо по UID с использованием imap-tools и возвращает полные данные.
+    """
+    try:
+        decrypted_password = fernet.decrypt(account.password.encode()).decode()
+        with MailBox(account.imap_server).login(account.mail_email, decrypted_password) as mailbox:
+            mailbox.folder.set(folder_name)
+
+            messages = list(mailbox.fetch(criteria=A(uid=str(uid)), bulk=True))
+            if not messages:
+                return None
+
+            msg = messages[0]
+            body = msg.html or msg.text or ""
+            attachments = {}
+
+            for att in msg.attachments:
+                if att.content_id and att.content_type.startswith("image/"):
+                    cid = att.content_id.strip('<>')
+                    b64_data = b64encode(att.payload).decode('utf-8')
+                    attachments[cid] = f"data:{att.content_type};base64,{b64_data}"
+
+            # Заменяем cid: ссылки в теле письма
+            if attachments:
+                body = re.sub(
+                    r'cid:<?([^">]+)>?',
+                    lambda m: attachments.get(m.group(1), m.group(0)),
+                    body
+                )
+
+            body = add_target_blank(body)
+            plain = extract_plain_text_from_html(body)
+            snippet = (plain[:60] + "...") if len(plain) > 60 else plain
+
+            return EmailInfo(
+                uid=int(msg.uid),
+                subject=msg.subject or "",
+                sender_name=msg.from_ or "",
+                email_address=msg.from_,
+                date=str(msg.date),
+                body=body,
+                snippet=snippet
+            )
+
+    except Exception as e:
+        raise MailServiceException(f"Ошибка при получении письма по UID={uid} из папки {folder_name}: {str(e)}")

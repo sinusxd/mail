@@ -1,11 +1,18 @@
-// MailSideBar.tsx
 import React, {useEffect} from "react";
 import {useDispatch, useSelector} from "react-redux";
 import {FolderInfo} from "../../api/models/dto/folderInfo";
-import {fetchEmailsByFolder, fetchFolders, setSelectedFolder} from "../../store/mailAccountSlice";
+import {
+    fetchEmailsByFolder,
+    fetchFolders,
+    setSelectedFolder,
+} from "../../store/mailAccountSlice";
 import {AppDispatch, RootState} from "../../store/store";
 
-export default function MailSideBar() {
+interface MailSideBarProps {
+    onCompose: () => void;
+}
+
+export default function MailSideBar({onCompose}: MailSideBarProps) {
     const dispatch = useDispatch<AppDispatch>();
     const folders = useSelector((state: RootState) => state.mailAccounts.folders);
     const selectedFolder = useSelector((state: RootState) => state.mailAccounts.selectedFolder);
@@ -43,7 +50,7 @@ export default function MailSideBar() {
                         cursor: "pointer",
                         fontWeight: selectedFolder?.id === folder.id ? 600 : 400,
                         textAlign: "left",
-                        paddingLeft: `${(folder.name.match(/\|/g)?.length || 0) * 12}px`
+                        paddingLeft: `${(folder.name.match(/\|/g)?.length || 0) * 12}px`,
                     }}
                 >
                     📁 {folder.name.split("|").pop()}
@@ -59,9 +66,9 @@ export default function MailSideBar() {
                     border: "none",
                     borderRadius: 4,
                     cursor: "pointer",
-                    width: "100%"
+                    width: "100%",
                 }}
-                onClick={() => alert("Открыть форму отправки письма")}
+                onClick={onCompose}
             >
                 ✉️ Написать письмо
             </button>

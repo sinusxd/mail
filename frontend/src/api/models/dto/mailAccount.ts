@@ -7,3 +7,10 @@ export interface MailAccount {
   email_count: number
   last_synced_uid: number
 }
+
+export interface MailAccountCreate {
+  imap_server: string;
+  smtp_server: string;
+  mail_email: string;
+  password: string; // добавляем, т.к. он нужен при создании
+}

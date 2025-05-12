@@ -7,6 +7,7 @@ import Signup from "../pages/signup/Signup";
 import MailViewer from "../pages/mailViewer/MailViewer";
 import MailDetail from "../pages/mailDetail/MailDetail";
 import Mail from "../pages/mail/Mail";
+import MailComposer from "../pages/mailComposer/MailComposer";
 
 
 interface PrivateRouteProps {
@@ -28,6 +29,7 @@ const AppRouter = () => {
     return (
         <Routes>
             <Route path="/" element={<MailViewer/>}/>
+            <Route path="/send" element={<MailComposer/>}/>
             <Route path="/mails" element={<Mail/>}/>
             <Route path="/emails" element={<MailDetail/>}/>
             <Route path="/signup" element={<Signup/>}/>
