@@ -1,6 +1,7 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, EmailStr
+from typing import Optional, List
 from datetime import datetime
+
 
 class EmailInfo(BaseModel):
     id: int
@@ -20,14 +21,23 @@ class EmailInfo(BaseModel):
 class FolderBase(BaseModel):
     name: str
 
+
 class FolderCreate(FolderBase):
     pass
+
 
 class FolderInfo(FolderBase):
     id: int
     email_count: int | None = None
     last_uid: int | None = None
 
-
     class Config:
         from_attributes = True
+
+
+class EmailSendRequest(BaseModel):
+    recipients: List[EmailStr]
+    subject: Optional[str] = None
+    body: str
+    is_html: bool = False
+    sender_name: Optional[str] = None
