@@ -3,6 +3,7 @@ from auth.router import router as auth_router
 from mail_accounts.router import router as mail_accounts_router
 from mail.router import router as mail_router
 from sync.router import router as sync_router
+from ai.router import router as ai_router
 
 app = FastAPI()
 
@@ -12,4 +13,5 @@ api_router.include_router(auth_router)
 api_router.include_router(mail_accounts_router)
 api_router.include_router(mail_router)
 api_router.include_router(sync_router)
+api_router.include_router(ai_router)
 app.include_router(api_router)
